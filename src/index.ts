@@ -7,8 +7,6 @@ import {
   AuditLogEvent,
   TextChannel,
 } from "discord.js";
-
-// ✅ IMPORTANT: remove .js extensions when using TypeScript
 import { getGuild, addInviteCredit } from "./config";
 import { cacheGuildInvites, findInviter } from "./inviteCache";
 import { recordAction, punish } from "./antiNuke";
