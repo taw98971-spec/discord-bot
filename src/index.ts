@@ -5,8 +5,10 @@ import {
   Events,
   EmbedBuilder,
   AuditLogEvent,
-  TextChannel,
+  type Guild,
+  type TextChannel,
 } from "discord.js";
+
 import { getGuild, addInviteCredit } from "./config";
 import { cacheGuildInvites, findInviter } from "./inviteCache";
 import { recordAction, punish } from "./antiNuke";
@@ -51,6 +53,7 @@ client.on(Events.GuildCreate, async (guild) => {
 });
 
 // ================= MEMBER JOIN =================
+
 client.on(Events.GuildMemberAdd, async (member) => {
   const guild = member.guild;
   const cfg = getGuild(guild.id);
@@ -63,7 +66,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
 
   const channel = guild.channels.cache.get(
     cfg.welcomeChannel
-  ) as TextChannel;
+  ) as TextChannel | undefined;
 
   if (!channel) return;
 
@@ -82,7 +85,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
   await channel.send({ embeds: [embed] });
 });
 
-// ================= ANTINUKE EVENTS =================
+// ================= ANTINUKE =================
 
 const AUDIT_STALENESS_MS = 5000;
 
@@ -90,48 +93,53 @@ const isRecent = (ts: number) =>
   Date.now() - ts < AUDIT_STALENESS_MS;
 
 async function handleAudit(
-  guild,
-  actionType,
-  targetId,
-  actionName
+  guild: Guild,
+  actionType: AuditLogEvent,
+  targetId: string,
+  actionName: any
 ) {
-  const logs = await guild.fetchAuditLogs({
-    type: actionType,
-    limit: 5,
-  });
+  try {
+    const logs = await guild.fetchAuditLogs({
+      type: actionType,
+      limit: 5,
+    });
 
-  const entry = logs.entries.find(
-    (e) =>
-      (e.target as any)?.id === targetId &&
-      isRecent(e.createdTimestamp)
-  );
+    const entry = logs.entries.find(
+      (e) =>
+        (e.target as any)?.id === targetId &&
+        isRecent(e.createdTimestamp)
+    );
 
-  if (!entry?.executor) return;
+    if (!entry?.executor) return;
 
-  const exceeded = recordAction(
-    guild.id,
-    entry.executor.id,
-    actionName
-  );
+    const exceeded = recordAction(
+      guild.id,
+      entry.executor.id,
+      actionName
+    );
 
-  if (exceeded)
-    await punish(client, guild, entry.executor.id, actionName);
+    if (exceeded) {
+      await punish(client, guild, entry.executor.id, actionName);
+    }
+  } catch (err) {
+    console.error("[AntiNuke error]", err);
+  }
 }
 
 client.on(Events.ChannelCreate, (c) =>
-  handleAudit(c.guild, 10, c.id, "channelCreate")
+  handleAudit(c.guild, AuditLogEvent.ChannelCreate, c.id, "channelCreate")
 );
 
 client.on(Events.ChannelDelete, (c) =>
-  handleAudit(c.guild, 12, c.id, "channelDelete")
+  handleAudit(c.guild, AuditLogEvent.ChannelDelete, c.id, "channelDelete")
 );
 
 client.on(Events.GuildRoleCreate, (r) =>
-  handleAudit(r.guild, 30, r.id, "roleCreate")
+  handleAudit(r.guild, AuditLogEvent.RoleCreate, r.id, "roleCreate")
 );
 
 client.on(Events.GuildRoleDelete, (r) =>
-  handleAudit(r.guild, 32, r.id, "roleDelete")
+  handleAudit(r.guild, AuditLogEvent.RoleDelete, r.id, "roleDelete")
 );
 
 // ================= COMMAND HANDLER =================
@@ -155,4 +163,4 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
-client.login(token);
+client.login(token);    
